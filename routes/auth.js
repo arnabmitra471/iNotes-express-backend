@@ -16,6 +16,7 @@ let generateTokens = async (user) => {
         // generating the access token and refresh token with the given payload
         const accessToken = jwt.sign(payload, process.env.SECRET_KEY, { expiresIn: "30m" })
         const refreshToken = jwt.sign(payload, process.env.REFRESH_TOKEN_SECRET_KEY, { expiresIn: "30d" })
+        console.log(accessToken,refreshToken)
 
         let userToken = await UserToken.create({ payload, token: refreshToken })
         await userToken.save()
@@ -44,44 +45,63 @@ router.post("/signup", async (req, res) => {
 
             if (user)
                 return res.status(409).json({ error: "The user already exists" })
-
-            const isPassMatch = await bcryptjs.compare(cpass, hashedPassword)
-            if (!isPassMatch) {
-                return res.status(400).json({ error: "Passwords don't match" })
-            }
             else {
-                const newUser = await User.create({
-                    name: user_name,
-                    email: user_email,
-                    password: hashedPassword,
-                    cpass
-                })
-                const tokens = await generateTokens(newUser)
-                res.status(201).json({ message: "The user has been created successfully", accessToken: tokens.accessToken })
+                const isPassMatch = await bcryptjs.compare(cpass, hashedPassword)
+                if (!isPassMatch) {
+                    return res.status(400).json({ error: "Passwords don't match" })
+                }
+                else {
+                    const newUser = await User.create({
+                        name: user_name,
+                        email: user_email,
+                        password: hashedPassword,
+                        cpass
+                    })
+                    const tokens = await generateTokens(newUser)
+                    res.status(201).json({ message: "The user has been created successfully", accessToken: tokens.accessToken })
 
+                }
             }
         }
     }
-    catch (error) {
+    catch (err) {
         console.error("Error during registration !!")
-        res.status(500).json({ error: "Internal server error " + error })
+        res.status(500).json({ error: "Internal server error " + err })
     }
 })
 
 router.post("/login", async (req, res) => {
-    // Extracting the email and password from the request body
-    const { email, password } = req.body
+    try {
+        // Validating the email and password fields that they must be present
+        const {email,password} = req.body
+        if (!email || !password) {
+            return res.status(400).json({ error: "All the fields are required" })
+        }
+        else {
+            // Extracting the email and password from the request body
+            const { email, password } = req.body
+            console.log(`Access token secret ${process.env.SECRET_KEY}`)
+            console.log(`Refresh token secret ${process.env.REFRESH_TOKEN_SECRET_KEY}`)
+            // Fetching the user with the specified email
+            let user = await User.findOne({ email })
+            console.log(user)
+            /* if the user does not exist then sending a 404 Not Found status code with a json response
+            and immediately returning from the function */
+            if (!user) {
+                return res.status(404).json({ error: "Invaid credentials. Please register first !!" })
+            }
+            let isPassMatch = await bcryptjs.compare(password, user.password)
+            if (!isPassMatch) {
+                return res.status(401).json({ error: "Please enter a valid password" })
+            }
+            const tokens = await generateTokens(user)
 
-    // Fetching the user with the specified email
-    let user = await User.findOne({ email })
-    /* if the user does not exist then sending an unauthorised status code 401 with a json response
-    and immediately returning from the function */
-    if (!user) {
-        return res.status(401).json({ error: "Invaid credentials. Please register first !!" })
+            return res.status(200).json({ accessToken: tokens.accessToken,refreshToken: tokens.refreshToken })
+        }
     }
-    let isPassMatch = await bcryptjs.compare(password, user.password)
-    if (!isPassMatch) {
-        return res.status(401).json({ error: "Please enter a valid password" })
+    catch (err) {
+        console.error("Error during login")
+        res.status(500).json({ error: "Internal Server Error" })
     }
 
 

@@ -1,6 +1,9 @@
 import express from "express"
 import mongoose from "mongoose"
 import auth from "./routes/auth.js"
+import dotenv from "dotenv"
+
+dotenv.config()
 
 const app = express()
 const port = 3000
